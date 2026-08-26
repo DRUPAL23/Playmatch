@@ -1,18 +1,11 @@
-import { Controller, Get, Module } from '@nestjs/common';
+import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
-
-@Controller()
-class HealthController {
-  @Get('/health')
-  health() { return { status: 'ok', service: 'playmatch-api', realMoneyEnabled: process.env.REAL_MONEY_ENABLED === 'true' }; }
-}
-
-@Module({ controllers: [HealthController] })
-class AppModule {}
+import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   app.enableCors({ origin: process.env.WEB_ORIGIN?.split(',') ?? false });
+  app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
   await app.listen(process.env.PORT ?? 4000);
 }
 bootstrap();
