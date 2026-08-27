@@ -2,131 +2,56 @@ generator client {
   provider = "prisma-client-js"
 }
 
-datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
-}
+datasource db { provider = "postgresql" url = env("DATABASE_URL") }
 
-enum MatchState {
-  OPEN
-  CHALLENGED
-  ACCEPTED
-  STAKE_PENDING
-  ESCROWED
-  READY
-  LIVE
-  RESULT_PENDING
-  RESULT_CONFIRMED
-  SETTLED
-  CANCELLED
-  DISPUTED
-  SUSPENDED
-  REFUNDED
-}
-
+enum MatchState { OPEN CHALLENGED ACCEPTED STAKE_PENDING ESCROWED READY LIVE RESULT_PENDING RESULT_CONFIRMED SETTLED CANCELLED DISPUTED SUSPENDED REFUNDED }
 enum ParticipantRole { CHALLENGER OPPONENT }
 enum LedgerDirection { DEBIT CREDIT }
 enum LedgerAccountType { PLAYER_AVAILABLE PLAYER_LOCKED ESCROW PLATFORM_FEE EXTERNAL_CLEARING }
-
 enum ResultStatus { PENDING CONFIRMED DISPUTED REJECTED }
+enum DisputeStatus { OPEN UNDER_REVIEW RESOLVED_REJECTED RESOLVED_REFUND RESOLVED_CONFIRMED }
 
 model User {
-  id          String   @id @default(cuid())
-  phone       String   @unique
-  displayName String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  wallets     Wallet[]
-  matches     MatchParticipant[]
+  id String @id @default(cuid()); phone String @unique; displayName String; createdAt DateTime @default(now()); updatedAt DateTime @updatedAt
+  wallets Wallet[]; matches MatchParticipant[]; events MatchEvent[]; disputes MatchDispute[]
 }
-
 model Wallet {
-  id        String @id @default(cuid())
-  userId    String
-  currency  String @default("KES")
-  availableMinor BigInt @default(0)
-  lockedMinor    BigInt @default(0)
-  user      User @relation(fields: [userId], references: [id])
-  @@unique([userId, currency])
+  id String @id @default(cuid()); userId String; currency String @default("KES"); availableMinor BigInt @default(0); lockedMinor BigInt @default(0)
+  user User @relation(fields:[userId], references:[id]); @@unique([userId,currency])
 }
-
 model Venue {
-  id        String @id @default(cuid())
-  name      String
-  latitude  Decimal?
-  longitude Decimal?
-  createdAt DateTime @default(now())
-  tables    GameTable[]
+  id String @id @default(cuid()); name String; latitude Decimal?; longitude Decimal?; createdAt DateTime @default(now())
+  tables GameTable[]
 }
-
 model GameTable {
-  id       String @id @default(cuid())
-  venueId  String
-  label    String
-  gameType String @default("POOL_8_BALL")
-  active   Boolean @default(true)
-  venue    Venue @relation(fields: [venueId], references: [id])
-  matches  Match[]
-  @@unique([venueId, label])
+  id String @id @default(cuid()); venueId String; label String; gameType String @default("POOL_8_BALL"); active Boolean @default(true)
+  venue Venue @relation(fields:[venueId], references:[id]); matches Match[]; @@unique([venueId,label])
 }
-
 model Match {
-  id             String @id @default(cuid())
-  tableId        String?
-  state          MatchState @default(OPEN)
-  currency       String @default("KES")
-  stakeMinor     BigInt
-  platformFeeBps Int @default(500)
-  resultStatus   ResultStatus @default(PENDING)
-  winnerId       String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  table          GameTable? @relation(fields: [tableId], references: [id])
-  participants   MatchParticipant[]
-  ledgerEntries  LedgerEntry[]
-  @@index([state, createdAt])
+  id String @id @default(cuid()); tableId String?; state MatchState @default(OPEN); currency String @default("KES"); stakeMinor BigInt; platformFeeBps Int @default(500); resultStatus ResultStatus @default(PENDING); winnerId String?
+  createdAt DateTime @default(now()); updatedAt DateTime @updatedAt
+  table GameTable? @relation(fields:[tableId], references:[id]); participants MatchParticipant[]; ledgerEntries LedgerEntry[]; events MatchEvent[]; disputes MatchDispute[]
+  @@index([state,createdAt])
 }
-
 model MatchParticipant {
-  id        String @id @default(cuid())
-  matchId   String
-  userId    String
-  role      ParticipantRole
-  stakeMinor BigInt
-  match     Match @relation(fields: [matchId], references: [id])
-  user      User @relation(fields: [userId], references: [id])
-  @@unique([matchId, userId])
+  id String @id @default(cuid()); matchId String; userId String; role ParticipantRole; stakeMinor BigInt
+  match Match @relation(fields:[matchId], references:[id]); user User @relation(fields:[userId], references:[id]); @@unique([matchId,userId])
 }
-
+model MatchEvent {
+  id String @id @default(cuid()); matchId String; actorId String?; type String; payload Json; createdAt DateTime @default(now())
+  match Match @relation(fields:[matchId], references:[id]); actor User? @relation(fields:[actorId], references:[id]); @@index([matchId,createdAt])
+}
+model MatchDispute {
+  id String @id @default(cuid()); matchId String; openedBy String; reason String; status DisputeStatus @default(OPEN); resolution String?; createdAt DateTime @default(now()); resolvedAt DateTime?
+  match Match @relation(fields:[matchId], references:[id]); opener User @relation(fields:[openedBy], references:[id]); @@index([matchId,status])
+}
 model LedgerAccount {
-  id       String @id @default(cuid())
-  type     LedgerAccountType
-  userId   String?
-  currency String @default("KES")
-  entries  LedgerEntry[]
+  id String @id @default(cuid()); type LedgerAccountType; userId String?; currency String @default("KES"); entries LedgerEntry[]
 }
-
 model LedgerEntry {
-  id             String @id @default(cuid())
-  accountId      String
-  matchId        String?
-  amountMinor    BigInt
-  direction      LedgerDirection
-  referenceId    String
-  idempotencyKey String @unique
-  createdAt      DateTime @default(now())
-  account        LedgerAccount @relation(fields: [accountId], references: [id])
-  match          Match? @relation(fields: [matchId], references: [id])
-  @@index([referenceId])
+  id String @id @default(cuid()); accountId String; matchId String?; amountMinor BigInt; direction LedgerDirection; referenceId String; idempotencyKey String @unique; createdAt DateTime @default(now())
+  account LedgerAccount @relation(fields:[accountId], references:[id]); match Match? @relation(fields:[matchId], references:[id]); @@index([referenceId])
 }
-
 model AuditLog {
-  id        String @id @default(cuid())
-  actorId   String?
-  action    String
-  entity    String
-  entityId  String
-  metadata  Json?
-  createdAt DateTime @default(now())
-  @@index([entity, entityId])
+  id String @id @default(cuid()); actorId String?; action String; entity String; entityId String; metadata Json?; createdAt DateTime @default(now()); @@index([entity,entityId])
 }
